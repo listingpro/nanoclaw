@@ -58,7 +58,11 @@ export function startCredentialProxy(
         // so OpenRouter receives the model we actually want.
         const overrideModel = secrets.CLAUDE_CODE_MODEL;
         const contentType = (req.headers['content-type'] || '').toLowerCase();
-        if (overrideModel && contentType.includes('application/json') && body.length > 0) {
+        if (
+          overrideModel &&
+          contentType.includes('application/json') &&
+          body.length > 0
+        ) {
           try {
             const parsed = JSON.parse(body.toString('utf8'));
             if (parsed && typeof parsed === 'object' && 'model' in parsed) {
@@ -143,7 +147,9 @@ export function startCredentialProxy(
             url: upstreamPath,
             headers: {
               ...headers,
-              authorization: headers['authorization'] ? '[REDACTED]' : undefined,
+              authorization: headers['authorization']
+                ? '[REDACTED]'
+                : undefined,
               'x-api-key': headers['x-api-key'] ? '[REDACTED]' : undefined,
             },
           },
