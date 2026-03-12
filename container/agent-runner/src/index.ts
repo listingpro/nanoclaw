@@ -34,6 +34,7 @@ interface ContainerOutput {
   result: string | null;
   newSessionId?: string;
   error?: string;
+  model?: string;
 }
 
 interface SessionEntry {
@@ -363,6 +364,7 @@ async function runQuery(
 
   let newSessionId: string | undefined;
   let lastAssistantUuid: string | undefined;
+  let currentModel: string | undefined;
   let messageCount = 0;
   let resultCount = 0;
 
@@ -389,6 +391,7 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
+  let currentAssistantText = '';
   for await (const message of query({
     prompt: stream,
     options: {
@@ -433,8 +436,26 @@ async function runQuery(
     const msgType = message.type === 'system' ? `system/${(message as { subtype?: string }).subtype}` : message.type;
     log(`[msg #${messageCount}] type=${msgType}`);
 
-    if (message.type === 'assistant' && 'uuid' in message) {
-      lastAssistantUuid = (message as { uuid: string }).uuid;
+    // Capture model ID if present (common in init or assistant messages)
+    if ('model' in message && typeof message.model === 'string') {
+      currentModel = message.model;
+    }
+
+    if (message.type === 'assistant') {
+      log(`Assistant message: ${JSON.stringify(message).slice(0, 500)}`);
+      if ('uuid' in message) {
+        lastAssistantUuid = (message as { uuid: string }).uuid;
+      }
+      // Accumulate text content as a fallback for the 'result' event
+      if ('message' in message && (message as any).message?.content) {
+        const content = (message as any).message.content as any[];
+        const textParts = content
+          .filter(c => c.type === 'text')
+          .map(c => c.text);
+        if (textParts.length > 0) {
+          currentAssistantText += textParts.join('');
+        }
+      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {
@@ -449,12 +470,16 @@ async function runQuery(
 
     if (message.type === 'result') {
       resultCount++;
-      const textResult = 'result' in message ? (message as { result?: string }).result : null;
+      // Use text from 'result' if available, otherwise use accumulated assistant text
+      const textResult = (('result' in message ? (message as { result?: string }).result : null) || currentAssistantText);
+      currentAssistantText = ''; // Reset for next turn
+
       log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
       writeOutput({
         status: 'success',
         result: textResult || null,
-        newSessionId
+        newSessionId,
+        model: currentModel
       });
     }
   }

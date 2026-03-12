@@ -4,6 +4,7 @@ import path from 'path';
 import {
   ASSISTANT_NAME,
   CREDENTIAL_PROXY_PORT,
+  CLAUDE_CODE_MODEL,
   IDLE_TIMEOUT,
   POLL_INTERVAL,
   TIMEZONE,
@@ -214,11 +215,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         typeof result.result === 'string'
           ? result.result
           : JSON.stringify(result.result);
-      // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
+      // Strip <internal>...</internal> blocks — agent uses reasoning for internal thought
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
       if (text) {
-        await channel.sendMessage(chatJid, text);
+        const modelName = CLAUDE_CODE_MODEL || result.model;
+        const attribution = modelName ? `\n\n_Processed by ${modelName}_` : '';
+        await channel.sendMessage(chatJid, text + attribution);
         outputSentToUser = true;
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
